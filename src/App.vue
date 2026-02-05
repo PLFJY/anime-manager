@@ -17,7 +17,6 @@ const {
   themeMode,
   accentColor,
   autoRefresh,
-  autoRefreshMinutes,
   applyTheme,
   applyAccent,
   loadSettings,
@@ -124,13 +123,11 @@ onMounted(async () => {
           :theme-mode="themeMode"
           :accent-color="accentColor"
           :auto-refresh="autoRefresh"
-          :auto-refresh-minutes="autoRefreshMinutes"
           :loading="loading"
           @update:base-dir="baseDir = $event"
           @update:theme-mode="themeMode = $event"
           @update:accent-color="accentColor = $event"
           @update:auto-refresh="autoRefresh = $event"
-          @update:auto-refresh-minutes="autoRefreshMinutes = $event"
           @refresh="refreshLibraryEntries"
           @load="loadLibraryEntries"
         />

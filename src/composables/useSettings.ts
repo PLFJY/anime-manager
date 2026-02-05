@@ -11,7 +11,6 @@ export const useSettings = () => {
   const themeMode = ref<ThemeMode>("system");
   const accentColor = ref("#0078D4");
   const autoRefresh = ref(false);
-  const autoRefreshMinutes = ref(30);
 
   let vuetifyTheme: ReturnType<typeof useTheme> | null = null;
 
@@ -83,7 +82,6 @@ export const useSettings = () => {
       themeMode: themeMode.value,
       accentColor: accentColor.value,
       autoRefresh: autoRefresh.value,
-      autoRefreshMinutes: autoRefreshMinutes.value,
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(payload));
   };
@@ -107,9 +105,6 @@ export const useSettings = () => {
       if (typeof parsed.autoRefresh === "boolean") {
         autoRefresh.value = parsed.autoRefresh;
       }
-      if (typeof parsed.autoRefreshMinutes === "number") {
-        autoRefreshMinutes.value = parsed.autoRefreshMinutes;
-      }
     } catch {
       return;
     }
@@ -125,7 +120,7 @@ export const useSettings = () => {
     persistSettings();
   });
 
-  watch([baseDir, autoRefresh, autoRefreshMinutes], () => {
+  watch([baseDir, autoRefresh], () => {
     persistSettings();
   });
 
@@ -140,7 +135,6 @@ export const useSettings = () => {
     themeMode,
     accentColor,
     autoRefresh,
-    autoRefreshMinutes,
     applyTheme,
     applyAccent,
     loadSettings,

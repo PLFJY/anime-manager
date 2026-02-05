@@ -7,7 +7,6 @@ defineProps<{
   themeMode: ThemeMode;
   accentColor: string;
   autoRefresh: boolean;
-  autoRefreshMinutes: number;
   loading: boolean;
 }>();
 
@@ -16,7 +15,6 @@ const emit = defineEmits<{
   (event: "update:themeMode", value: ThemeMode): void;
   (event: "update:accentColor", value: string): void;
   (event: "update:autoRefresh", value: boolean): void;
-  (event: "update:autoRefreshMinutes", value: number): void;
   (event: "refresh"): void;
   (event: "load"): void;
 }>();
@@ -137,25 +135,6 @@ const themeModeOptions = [
                 </div>
               </template>
             </v-switch>
-
-            <v-text-field
-              variant="filled"
-              label="更新间隔（分钟）"
-              type="number"
-              min="5"
-              max="720"
-              :model-value="autoRefreshMinutes"
-              @update:model-value="emit('update:autoRefreshMinutes', Number($event || 0))"
-              prepend-inner-icon="mdi-timer"
-              rounded="lg"
-              density="comfortable"
-              class="mt-4"
-              style="max-width: 200px"
-            />
-
-            <p class="text-caption mt-4 text-medium-emphasis">
-              当前版本仅保存设置，不执行定时任务。
-            </p>
           </v-card-text>
         </v-card>
       </div>
