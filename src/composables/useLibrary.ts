@@ -1,18 +1,18 @@
-import { computed, ref, watch, type Ref } from "vue";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadLibrary, refreshLibrary } from "../services/library";
 import type { LibraryEntry } from "../types";
 
-export const useLibrary = (baseDir: Ref<string>) => {
-  const search = ref("");
-  const items = ref<LibraryEntry[]>([]);
-  const loading = ref(false);
-  const error = ref("");
-  const selectedId = ref<string | null>(null);
+export const useLibrary = (baseDir: string) => {
+  const [search, setSearch] = useState("");
+  const [items, setItems] = useState<LibraryEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const statusFilter = ref<string[]>([]);
-  const fansubFilter = ref<string[]>([]);
-  const subtitleFilter = ref<string[]>([]);
-  const qualityFilter = ref<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [fansubFilter, setFansubFilter] = useState<string[]>([]);
+  const [subtitleFilter, setSubtitleFilter] = useState<string[]>([]);
+  const [qualityFilter, setQualityFilter] = useState<string[]>([]);
 
   const normalized = (value: string) => value.toLowerCase().replace(/\s+/g, "");
 
@@ -30,10 +30,10 @@ export const useLibrary = (baseDir: Ref<string>) => {
     return true;
   };
 
-  const statusOptions = computed(() => {
+  const statusOptions = useMemo(() => {
     let finished = 0;
     let ongoing = 0;
-    for (const item of items.value) {
+    for (const item of items) {
       if (isCompleted(item)) {
         finished += 1;
       } else {
@@ -44,11 +44,11 @@ export const useLibrary = (baseDir: Ref<string>) => {
       { name: "已完结", count: finished },
       { name: "未完结", count: ongoing },
     ];
-  });
+  }, [items]);
 
-  const fansubOptions = computed(() => {
+  const fansubOptions = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const item of items.value) {
+    for (const item of items) {
       const entries = splitMulti(item.fansub);
       if (!entries.length) continue;
       for (const entry of entries) {
@@ -58,83 +58,81 @@ export const useLibrary = (baseDir: Ref<string>) => {
     return Array.from(counts.entries())
       .sort(([a], [b]) => a.localeCompare(b, "zh"))
       .map(([name, count]) => ({ name, count }));
-  });
+  }, [items]);
 
-  const subtitleOptions = computed(() => {
+  const subtitleOptions = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const item of items.value) {
+    for (const item of items) {
       if (!item.subtitleType) continue;
       counts.set(item.subtitleType, (counts.get(item.subtitleType) ?? 0) + 1);
     }
     return Array.from(counts.entries())
       .sort(([a], [b]) => a.localeCompare(b, "zh"))
       .map(([name, count]) => ({ name, count }));
-  });
+  }, [items]);
 
-  const qualityOptions = computed(() => {
+  const qualityOptions = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const item of items.value) {
+    for (const item of items) {
       if (!item.quality) continue;
       counts.set(item.quality, (counts.get(item.quality) ?? 0) + 1);
     }
     return Array.from(counts.entries())
       .sort(([a], [b]) => a.localeCompare(b, "zh"))
       .map(([name, count]) => ({ name, count }));
-  });
+  }, [items]);
 
-  const hasAnyFilter = computed(
+  const hasAnyFilter = useMemo(
     () =>
-      statusFilter.value.length ||
-      fansubFilter.value.length ||
-      subtitleFilter.value.length ||
-      qualityFilter.value.length
+      statusFilter.length > 0 ||
+      fansubFilter.length > 0 ||
+      subtitleFilter.length > 0 ||
+      qualityFilter.length > 0,
+    [statusFilter, fansubFilter, subtitleFilter, qualityFilter]
   );
 
-  const toggleSelection = (target: { value: string[] }, value: string) => {
-    if (target.value.includes(value)) {
-      target.value = target.value.filter((item) => item !== value);
-    } else {
-      target.value = [...target.value, value];
+  const toggleSelection = useCallback((list: string[], value: string) => {
+    if (list.includes(value)) {
+      return list.filter((item) => item !== value);
     }
-  };
+    return [...list, value];
+  }, []);
 
-  const toggleStatus = (value: string) => toggleSelection(statusFilter, value);
-  const toggleFansub = (value: string) => toggleSelection(fansubFilter, value);
+  const toggleStatus = (value: string) =>
+    setStatusFilter((prev) => toggleSelection(prev, value));
+  const toggleFansub = (value: string) =>
+    setFansubFilter((prev) => toggleSelection(prev, value));
   const toggleSubtitle = (value: string) =>
-    toggleSelection(subtitleFilter, value);
-  const toggleQuality = (value: string) => toggleSelection(qualityFilter, value);
+    setSubtitleFilter((prev) => toggleSelection(prev, value));
+  const toggleQuality = (value: string) =>
+    setQualityFilter((prev) => toggleSelection(prev, value));
 
   const clearAllFilters = () => {
-    statusFilter.value = [];
-    fansubFilter.value = [];
-    subtitleFilter.value = [];
-    qualityFilter.value = [];
+    setStatusFilter([]);
+    setFansubFilter([]);
+    setSubtitleFilter([]);
+    setQualityFilter([]);
   };
 
-  const filteredItems = computed(() => {
-    const keyword = normalized(search.value.trim());
-    return items.value.filter((item) => {
-      const matchesStatus = !statusFilter.value.length
+  const filteredItems = useMemo(() => {
+    const keyword = normalized(search.trim());
+    return items.filter((item) => {
+      const matchesStatus = !statusFilter.length
         ? true
-        : statusFilter.value.some((value) =>
+        : statusFilter.some((value) =>
             value === "已完结" ? isCompleted(item) : !isCompleted(item)
           );
       if (!matchesStatus) return false;
       if (
-        fansubFilter.value.length &&
-        !splitMulti(item.fansub).some((value) =>
-          fansubFilter.value.includes(value)
-        )
+        fansubFilter.length &&
+        !splitMulti(item.fansub).some((value) => fansubFilter.includes(value))
       ) {
         return false;
       }
-      if (
-        subtitleFilter.value.length &&
-        !subtitleFilter.value.includes(item.subtitleType)
-      ) {
+      if (subtitleFilter.length && !subtitleFilter.includes(item.subtitleType)) {
         return false;
       }
-      if (qualityFilter.value.length && !qualityFilter.value.includes(item.quality)) {
+      if (qualityFilter.length && !qualityFilter.includes(item.quality)) {
         return false;
       }
       if (!keyword) return true;
@@ -151,11 +149,11 @@ export const useLibrary = (baseDir: Ref<string>) => {
         .filter(Boolean)
         .some((value) => normalized(value).includes(keyword));
     });
-  });
+  }, [search, items, statusFilter, fansubFilter, subtitleFilter, qualityFilter]);
 
-  const groupedItems = computed(() => {
+  const groupedItems = useMemo(() => {
     const groups = new Map<string, LibraryEntry[]>();
-    for (const item of filteredItems.value) {
+    for (const item of filteredItems) {
       if (!groups.has(item.group)) {
         groups.set(item.group, []);
       }
@@ -167,60 +165,65 @@ export const useLibrary = (baseDir: Ref<string>) => {
         name,
         items: groupItems.sort((a, b) => a.title.localeCompare(b.title, "zh")),
       }));
-  });
+  }, [filteredItems]);
 
-  const selected = computed(() => {
-    return items.value.find((item) => item.id === selectedId.value) ?? null;
-  });
+  const selected = useMemo(
+    () => items.find((item) => item.id === selectedId) ?? null,
+    [items, selectedId]
+  );
 
-  watch(filteredItems, (list) => {
+  useEffect(() => {
+    const list = filteredItems;
     if (!list.length) {
-      selectedId.value = null;
+      setSelectedId(null);
       return;
     }
-    if (!list.some((item) => item.id === selectedId.value)) {
-      selectedId.value = list[0].id;
+    if (!list.some((item) => item.id === selectedId)) {
+      setSelectedId(list[0].id);
     }
-  });
+  }, [filteredItems, selectedId]);
 
   const loadLibraryEntries = async () => {
-    loading.value = true;
-    error.value = "";
+    setLoading(true);
+    setError("");
     try {
-      const results = await loadLibrary(baseDir.value.trim());
-      items.value = results;
-      selectedId.value = results[0]?.id ?? null;
+      const results = await loadLibrary(baseDir.trim());
+      setItems(results);
+      setSelectedId(results[0]?.id ?? null);
       return results;
     } catch (err) {
-      error.value = err instanceof Error ? err.message : String(err);
+      setError(err instanceof Error ? err.message : String(err));
       return [];
     } finally {
-      loading.value = false;
+      setLoading(false);
     }
   };
 
   const refreshLibraryEntries = async () => {
-    loading.value = true;
-    error.value = "";
+    setLoading(true);
+    setError("");
     try {
-      const results = await refreshLibrary(baseDir.value.trim());
-      items.value = results;
-      selectedId.value = results[0]?.id ?? null;
+      const results = await refreshLibrary(baseDir.trim());
+      setItems(results);
+      setSelectedId(results[0]?.id ?? null);
       return results;
     } catch (err) {
-      error.value = err instanceof Error ? err.message : String(err);
+      setError(err instanceof Error ? err.message : String(err));
       return [];
     } finally {
-      loading.value = false;
+      setLoading(false);
     }
   };
 
   return {
     search,
+    setSearch,
     items,
+    setItems,
     loading,
     error,
     selectedId,
+    setSelectedId,
     selected,
     statusFilter,
     fansubFilter,

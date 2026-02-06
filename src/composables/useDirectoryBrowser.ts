@@ -1,4 +1,4 @@
-import { computed, ref, type ComputedRef, type Ref } from "vue";
+import { useCallback, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   listDirectory,
   openInExplorer,
@@ -9,28 +9,30 @@ import type { FileEntry, LibraryEntry } from "../types";
 import type { PageName } from "./useLayout";
 
 interface DirectoryDeps {
-  baseDir: Ref<string>;
-  items: Ref<LibraryEntry[]>;
-  selected: ComputedRef<LibraryEntry | null>;
-  selectedId: Ref<string | null>;
-  page: Ref<PageName>;
+  baseDir: string;
+  items: LibraryEntry[];
+  setItems: Dispatch<SetStateAction<LibraryEntry[]>>;
+  selected: LibraryEntry | null;
+  setSelectedId: (value: string | null) => void;
+  setPage: (value: PageName) => void;
 }
 
 export const useDirectoryBrowser = ({
   baseDir,
   items,
+  setItems,
   selected,
-  selectedId,
-  page,
+  setSelectedId,
+  setPage,
 }: DirectoryDeps) => {
-  const dirEntries = ref<FileEntry[]>([]);
-  const dirLoading = ref(false);
-  const dirError = ref("");
-  const currentDir = ref("");
-  const rootDir = ref("");
+  const [dirEntries, setDirEntries] = useState<FileEntry[]>([]);
+  const [dirLoading, setDirLoading] = useState(false);
+  const [dirError, setDirError] = useState("");
+  const [currentDir, setCurrentDir] = useState("");
+  const [rootDir, setRootDir] = useState("");
 
-  const dirCache = new Map<string, FileEntry[]>();
-  let dirRequestId = 0;
+  const dirCache = useRef(new Map<string, FileEntry[]>());
+  const dirRequestId = useRef(0);
 
   const formatSize = (size?: number) => {
     if (!size) return "-";
@@ -69,35 +71,35 @@ export const useDirectoryBrowser = ({
   };
 
   const loadDirectoryEntries = async (path: string) => {
-    const requestId = ++dirRequestId;
-    dirLoading.value = true;
-    dirError.value = "";
+    const requestId = ++dirRequestId.current;
+    setDirLoading(true);
+    setDirError("");
     try {
       const entries = await listDirectory(path);
-      if (requestId !== dirRequestId) return;
+      if (requestId !== dirRequestId.current) return;
       const filtered = entries.filter(
         (entry) => entry.name.toLowerCase() !== "manifest.yml"
       );
       const sorted = sortDirectoryEntries(filtered);
-      dirEntries.value = sorted;
-      dirCache.set(path, sorted);
+      setDirEntries(sorted);
+      dirCache.current.set(path, sorted);
     } catch (err) {
-      if (requestId !== dirRequestId) return;
-      dirError.value = err instanceof Error ? err.message : String(err);
+      if (requestId !== dirRequestId.current) return;
+      setDirError(err instanceof Error ? err.message : String(err));
     } finally {
-      if (requestId === dirRequestId) {
-        dirLoading.value = false;
+      if (requestId === dirRequestId.current) {
+        setDirLoading(false);
       }
     }
   };
 
   const openDetail = (item: LibraryEntry) => {
-    selectedId.value = item.id;
-    rootDir.value = item.path;
-    currentDir.value = item.path;
-    page.value = "detail";
-    const cached = dirCache.get(item.path);
-    dirEntries.value = cached ? [...cached] : [];
+    setSelectedId(item.id);
+    setRootDir(item.path);
+    setCurrentDir(item.path);
+    setPage("detail");
+    const cached = dirCache.current.get(item.path);
+    setDirEntries(cached ? [...cached] : []);
     loadDirectoryEntries(item.path);
   };
 
@@ -105,48 +107,48 @@ export const useDirectoryBrowser = ({
     try {
       await openInExplorer(path);
     } catch (err) {
-      dirError.value = err instanceof Error ? err.message : String(err);
+      setDirError(err instanceof Error ? err.message : String(err));
     }
   };
 
   const openEntry = async (entry: FileEntry) => {
     if (entry.isDir) {
-      currentDir.value = entry.path;
-      const cached = dirCache.get(entry.path);
-      dirEntries.value = cached ? [...cached] : [];
+      setCurrentDir(entry.path);
+      const cached = dirCache.current.get(entry.path);
+      setDirEntries(cached ? [...cached] : []);
       await loadDirectoryEntries(entry.path);
       return;
     }
 
     await openPath(entry.path);
 
-    if (isVideoFile(entry) && selected.value) {
+    if (isVideoFile(entry) && selected) {
       const now = Math.floor(Date.now() / 1000);
-      const entryId = selected.value.id;
-      const base = baseDir.value.trim();
+      const entryId = selected.id;
+      const base = baseDir.trim();
       updatePlayHistory(base, entryId, entry.path, entry.name).catch(() => {
         return;
       });
-      const index = items.value.findIndex((item) => item.id === entryId);
+      const index = items.findIndex((item) => item.id === entryId);
       if (index >= 0) {
-        const updated = { ...items.value[index] };
+        const updated = { ...items[index] };
         updated.lastPlayedPath = entry.path;
         updated.lastPlayedName = entry.name;
         updated.lastPlayedAt = now;
-        items.value.splice(index, 1, updated);
+        setItems((prev) => prev.map((item) => (item.id === entryId ? updated : item)));
       }
     }
   };
 
   const playLast = async () => {
-    if (!selected.value?.lastPlayedPath) return;
-    await openPath(selected.value.lastPlayedPath);
+    if (!selected?.lastPlayedPath) return;
+    await openPath(selected.lastPlayedPath);
   };
 
-  const buildBreadcrumbs = () => {
-    if (!rootDir.value) return [];
-    const root = rootDir.value;
-    const current = currentDir.value || root;
+  const buildBreadcrumbs = useCallback(() => {
+    if (!rootDir) return [];
+    const root = rootDir;
+    const current = currentDir || root;
     const normalize = (value: string) =>
       value.replace(/[/\\]+/g, "/").replace(/\/$/, "");
     const rootNorm = normalize(root);
@@ -172,18 +174,18 @@ export const useDirectoryBrowser = ({
       crumbs.push({ label: part, path: joinPath(root, acc) });
     });
     return crumbs;
-  };
+  }, [currentDir, rootDir]);
 
-  const breadcrumbs = computed(() => buildBreadcrumbs());
+  const breadcrumbs = useMemo(() => buildBreadcrumbs(), [buildBreadcrumbs]);
 
   const navigateBreadcrumb = (path: string) => {
     if (path === "home") {
-      page.value = "library";
+      setPage("library");
       return;
     }
-    currentDir.value = path;
-    const cached = dirCache.get(path);
-    dirEntries.value = cached ? [...cached] : [];
+    setCurrentDir(path);
+    const cached = dirCache.current.get(path);
+    setDirEntries(cached ? [...cached] : []);
     loadDirectoryEntries(path);
   };
 

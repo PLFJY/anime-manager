@@ -1,41 +1,37 @@
-import { computed, ref } from "vue";
+import { useCallback, useMemo, useState } from "react";
 
 export type PageName = "library" | "detail" | "settings";
 
-const compactMedia = window.matchMedia("(max-width: 1100px)");
-
 export const useLayout = () => {
-  const page = ref<PageName>("library");
-  const navCollapsed = ref(false);
-  const isCompact = ref(compactMedia.matches);
-  const filtersOpen = ref(!compactMedia.matches);
-  const animationsEnabled = ref(true);
+  const [page, setPage] = useState<PageName>("library");
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [isCompact] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [animationsEnabled, setAnimationsEnabled] = useState(true);
 
-  const showFilters = computed(() =>
-    isCompact.value ? filtersOpen.value : true
+  const showFilters = useMemo(() => filtersOpen, [filtersOpen]);
+
+  const navSelection = useMemo(
+    () => (page === "settings" ? "settings" : "library"),
+    [page]
   );
-  const navSelection = computed(() =>
-    page.value === "settings" ? "settings" : "library"
-  );
 
-  const initLayout = () => {
-    isCompact.value = compactMedia.matches;
-    filtersOpen.value = !compactMedia.matches;
-  };
-
-  compactMedia.addEventListener("change", (event) => {
-    isCompact.value = event.matches;
-    filtersOpen.value = event.matches ? false : true;
-  });
+  const initLayout = useCallback(() => {
+    setFiltersOpen(false);
+  }, []);
 
   return {
     page,
+    setPage,
     navCollapsed,
+    setNavCollapsed,
     isCompact,
     filtersOpen,
+    setFiltersOpen,
     showFilters,
     navSelection,
     animationsEnabled,
+    setAnimationsEnabled,
     initLayout,
   };
 };

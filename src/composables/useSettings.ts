@@ -1,40 +1,31 @@
-import { ref, watch } from "vue";
-import { useTheme } from "vuetify";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export type ThemeMode = "system" | "light" | "dark";
 
 const SETTINGS_KEY = "anime-manager.settings.v1";
-const systemMedia = window.matchMedia("(prefers-color-scheme: dark)");
 
 export const useSettings = () => {
-  const baseDir = ref("F:\\Videos");
-  const themeMode = ref<ThemeMode>("system");
-  const accentColor = ref("#0078D4");
-  const autoRefresh = ref(false);
+  const [baseDir, setBaseDir] = useState("F:\\Videos");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [accentColor, setAccentColor] = useState("#0078D4");
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  let vuetifyTheme: ReturnType<typeof useTheme> | null = null;
+  const systemMedia = useMemo(
+    () => window.matchMedia("(prefers-color-scheme: dark)"),
+    []
+  );
 
-  const setVuetifyTheme = (theme: ReturnType<typeof useTheme>) => {
-    vuetifyTheme = theme;
-  };
-
-  const applyTheme = () => {
+  const applyTheme = useCallback(() => {
     const isDark =
-      themeMode.value === "dark" ||
-      (themeMode.value === "system" && systemMedia.matches);
+      themeMode === "dark" || (themeMode === "system" && systemMedia.matches);
     const nextTheme = isDark ? "dark" : "light";
 
-    // Update CSS variables
     document.documentElement.dataset.theme = nextTheme;
     document.documentElement.style.colorScheme = nextTheme;
+  }, [themeMode, systemMedia]);
 
-    // Update Vuetify theme
-    if (vuetifyTheme) {
-      vuetifyTheme.global.name.value = nextTheme;
-    }
-  };
-
-  const parseHexColor = (value: string) => {
+  const parseHexColor = useCallback((value: string) => {
     const hex = value.replace("#", "").trim();
     if (hex.length === 3) {
       const r = parseInt(hex[0] + hex[0], 16);
@@ -49,16 +40,15 @@ export const useSettings = () => {
       return { r, g, b };
     }
     return { r: 0, g: 120, b: 212 };
-  };
+  }, []);
 
   const clamp = (value: number) => Math.max(0, Math.min(255, value));
-
   const lighten = (value: number, amount: number) =>
     clamp(Math.round(value + (255 - value) * amount));
 
-  const applyAccent = () => {
-    const color = accentColor.value || "#0078D4";
-    const { r, g, b } = parseHexColor(color);
+  const applyAccent = useCallback(() => {
+    const color = accentColor || "#0078D4";
+    const { r, g, b } = parseHexColor(accentColor);
     const strong = `rgb(${lighten(r, 0.14)}, ${lighten(g, 0.14)}, ${lighten(
       b,
       0.14
@@ -68,76 +58,85 @@ export const useSettings = () => {
     document.documentElement.style.setProperty("--accent", color);
     document.documentElement.style.setProperty("--accent-strong", strong);
     document.documentElement.style.setProperty("--accent-soft", soft);
+  }, [accentColor, parseHexColor]);
 
-    // Update Vuetify theme colors
-    if (vuetifyTheme) {
-      vuetifyTheme.themes.value.light.colors.primary = color;
-      vuetifyTheme.themes.value.dark.colors.primary = strong;
-    }
-  };
-
-  const persistSettings = () => {
+  const persistSettings = useCallback(() => {
     const payload = {
-      baseDir: baseDir.value,
-      themeMode: themeMode.value,
-      accentColor: accentColor.value,
-      autoRefresh: autoRefresh.value,
+      baseDir,
+      themeMode,
+      accentColor,
+      autoRefresh,
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(payload));
-  };
+  }, [baseDir, themeMode, accentColor, autoRefresh]);
 
-  const loadSettings = () => {
+  const loadSettings = useCallback(() => {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return;
+    if (!raw) {
+      setSettingsLoaded(true);
+      return;
+    }
+
     try {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (typeof parsed.baseDir === "string") baseDir.value = parsed.baseDir;
+      if (typeof parsed.baseDir === "string") setBaseDir(parsed.baseDir);
       if (
         parsed.themeMode === "system" ||
         parsed.themeMode === "light" ||
         parsed.themeMode === "dark"
       ) {
-        themeMode.value = parsed.themeMode;
+        setThemeMode(parsed.themeMode);
       }
       if (typeof parsed.accentColor === "string") {
-        accentColor.value = parsed.accentColor;
+        setAccentColor(parsed.accentColor);
       }
       if (typeof parsed.autoRefresh === "boolean") {
-        autoRefresh.value = parsed.autoRefresh;
+        setAutoRefresh(parsed.autoRefresh);
       }
     } catch {
       return;
+    } finally {
+      setSettingsLoaded(true);
     }
-  };
+  }, []);
 
-  watch(themeMode, () => {
+  useEffect(() => {
     applyTheme();
     persistSettings();
-  });
+  }, [themeMode, applyTheme, persistSettings]);
 
-  watch(accentColor, () => {
+  useEffect(() => {
     applyAccent();
     persistSettings();
-  });
+  }, [accentColor, applyAccent, persistSettings]);
 
-  watch([baseDir, autoRefresh], () => {
+  useEffect(() => {
     persistSettings();
-  });
+  }, [baseDir, autoRefresh, persistSettings]);
 
-  systemMedia.addEventListener("change", () => {
-    if (themeMode.value === "system") {
-      applyTheme();
-    }
-  });
+  useEffect(() => {
+    const onSystemThemeChange = () => {
+      if (themeMode === "system") {
+        applyTheme();
+      }
+    };
+
+    systemMedia.addEventListener("change", onSystemThemeChange);
+    return () => systemMedia.removeEventListener("change", onSystemThemeChange);
+  }, [themeMode, applyTheme, systemMedia]);
 
   return {
     baseDir,
+    setBaseDir,
     themeMode,
+    setThemeMode,
     accentColor,
+    setAccentColor,
     autoRefresh,
+    setAutoRefresh,
+    settingsLoaded,
     applyTheme,
     applyAccent,
     loadSettings,
-    setVuetifyTheme,
   };
 };

@@ -1,0 +1,69 @@
+import { Button, Text } from "@fluentui/react-components";
+import {
+  LibraryRegular,
+  PanelLeftContractRegular,
+  PanelLeftExpandRegular,
+  SettingsRegular,
+} from "@fluentui/react-icons";
+
+type NavSelection = "library" | "settings";
+
+interface NavRailProps {
+  collapsed: boolean;
+  selection: NavSelection;
+  onToggle: () => void;
+  onSelect: (value: NavSelection) => void;
+}
+
+export default function NavRail({
+  collapsed,
+  selection,
+  onToggle,
+  onSelect,
+}: NavRailProps) {
+  return (
+    <aside className={`nav-rail ${collapsed ? "" : "expanded"}`}>
+      <div className="nav-brand">
+        <div className="brand-icon">AM</div>
+        {!collapsed && (
+          <div className="brand-text">
+            <div className="brand-title">Anime Manager</div>
+            <Text size={200} className="brand-sub">
+              Fluent UI · React
+            </Text>
+          </div>
+        )}
+      </div>
+
+      <div className="nav-items">
+        <Button
+          appearance={selection === "library" ? "primary" : "subtle"}
+          icon={<LibraryRegular />}
+          onClick={() => onSelect("library")}
+        >
+          {!collapsed ? "资源库" : null}
+        </Button>
+
+        <Button
+          appearance={selection === "settings" ? "primary" : "subtle"}
+          icon={<SettingsRegular />}
+          onClick={() => onSelect("settings")}
+        >
+          {!collapsed ? "设置" : null}
+        </Button>
+      </div>
+
+      <div className="nav-footer">
+        <Button
+          appearance="subtle"
+          icon={
+            collapsed ? <PanelLeftExpandRegular /> : <PanelLeftContractRegular />
+          }
+          onClick={onToggle}
+        >
+          {!collapsed ? "收起" : null}
+        </Button>
+      </div>
+    </aside>
+  );
+}
