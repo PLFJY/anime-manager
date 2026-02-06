@@ -1,6 +1,6 @@
 # Anime Manager
 
-本地动漫资源管理器（Tauri + Vue 3 + Vuetify）。通过扫描你的本地视频库下的
+本地动漫资源管理器（Tauri + React 18）。通过扫描你的本地视频库下的
 `manifest.yml` 生成索引，并缓存到 SQLite，提供快速检索与浏览。
 
 ## 快速开始
