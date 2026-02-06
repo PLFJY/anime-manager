@@ -199,6 +199,7 @@ export default function LibraryPage(props: LibraryPageProps) {
         </div>
 
         <Button
+          className="filter-clear-button"
           appearance={props.hasAnyFilter ? "secondary" : "primary"}
           onClick={props.onClearFilters}
         >
