@@ -1,6 +1,6 @@
 [package]
 name = "anime-manager"
-version = "0.2.0"
+version = "0.2.1"
 description = "Anime manager"
 authors = ["you"]
 edition = "2021"
