@@ -6,6 +6,7 @@ export const useLibrary = (baseDir: string) => {
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<LibraryEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<"load" | "refresh" | null>(null);
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -183,7 +184,8 @@ export const useLibrary = (baseDir: string) => {
     }
   }, [filteredItems, selectedId]);
 
-  const loadLibraryEntries = async () => {
+  const loadLibraryEntries = useCallback(async () => {
+    setLoadingAction("load");
     setLoading(true);
     setError("");
     try {
@@ -196,10 +198,12 @@ export const useLibrary = (baseDir: string) => {
       return [];
     } finally {
       setLoading(false);
+      setLoadingAction(null);
     }
-  };
+  }, [baseDir]);
 
-  const refreshLibraryEntries = async () => {
+  const refreshLibraryEntries = useCallback(async () => {
+    setLoadingAction("refresh");
     setLoading(true);
     setError("");
     try {
@@ -212,8 +216,9 @@ export const useLibrary = (baseDir: string) => {
       return [];
     } finally {
       setLoading(false);
+      setLoadingAction(null);
     }
-  };
+  }, [baseDir]);
 
   return {
     search,
@@ -221,6 +226,7 @@ export const useLibrary = (baseDir: string) => {
     items,
     setItems,
     loading,
+    loadingAction,
     error,
     selectedId,
     setSelectedId,

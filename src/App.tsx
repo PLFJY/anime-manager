@@ -1,6 +1,5 @@
 import { FluentProvider, webDarkTheme, webLightTheme } from "@fluentui/react-components";
 import { useEffect, useMemo, useRef } from "react";
-import { loadLibrary, refreshLibrary } from "./services/library";
 import NavRail from "./components/NavRail";
 import { useDirectoryBrowser } from "./composables/useDirectoryBrowser";
 import { useLayout } from "./composables/useLayout";
@@ -45,6 +44,7 @@ export default function App() {
     items,
     setItems,
     loading,
+    loadingAction,
     error,
     selectedId,
     setSelectedId,
@@ -122,25 +122,13 @@ export default function App() {
     const run = async () => {
       try {
         if (autoRefresh) {
-          const results = await refreshLibrary(baseDir.trim());
-          if (!cancelled) {
-            setItems(results);
-            setSelectedId(results[0]?.id ?? null);
-          }
+          await triggerRefresh();
           return;
         }
 
-        const cached = await loadLibrary(baseDir.trim());
-        if (!cancelled) {
-          setItems(cached);
-          setSelectedId(cached[0]?.id ?? null);
-        }
+        const cached = await reloadFromCache();
         if (!cached.length && !cancelled) {
-          const refreshed = await refreshLibrary(baseDir.trim());
-          if (!cancelled) {
-            setItems(refreshed);
-            setSelectedId(refreshed[0]?.id ?? null);
-          }
+          await triggerRefresh();
         }
       } catch (err) {
         if (!cancelled) {
@@ -187,6 +175,7 @@ export default function App() {
             accentColor={accentColor}
             autoRefresh={autoRefresh}
             loading={loading}
+            loadingAction={loadingAction}
             onBaseDirChange={setBaseDir}
             onThemeModeChange={setThemeMode}
             onAccentColorChange={setAccentColor}
@@ -218,6 +207,7 @@ export default function App() {
             baseDir={baseDir}
             items={items}
             loading={loading}
+            loadingAction={loadingAction}
             error={error}
             search={search}
             statusOptions={statusOptions}

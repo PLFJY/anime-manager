@@ -11,6 +11,7 @@ interface LibraryPageProps {
   baseDir: string;
   items: LibraryEntry[];
   loading: boolean;
+  loadingAction: "load" | "refresh" | null;
   error: string;
   search: string;
   statusOptions: OptionCount[];
@@ -41,6 +42,7 @@ interface LibraryPageProps {
 
 export default function LibraryPage(props: LibraryPageProps) {
   const pageClass = `page library-page ${props.active ? "active" : ""}`;
+  const loadingText = props.loadingAction === "refresh" ? "正在更新缓存..." : "正在读取缓存...";
   const drawerRef = useRef<HTMLElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -101,7 +103,7 @@ export default function LibraryPage(props: LibraryPageProps) {
           {props.loading && (
             <>
               <Spinner size="tiny" />
-              <span>正在读取缓存...</span>
+              <span>{loadingText}</span>
             </>
           )}
         </div>
@@ -111,7 +113,7 @@ export default function LibraryPage(props: LibraryPageProps) {
             {props.loading && (
               <div className="loading-state">
                 <Spinner />
-                <span>正在读取缓存...</span>
+                <span>{loadingText}</span>
               </div>
             )}
 

@@ -102,17 +102,16 @@ export const useSettings = () => {
 
   useEffect(() => {
     applyTheme();
-    persistSettings();
-  }, [themeMode, applyTheme, persistSettings]);
+  }, [themeMode, applyTheme]);
 
   useEffect(() => {
     applyAccent();
-    persistSettings();
-  }, [accentColor, applyAccent, persistSettings]);
+  }, [accentColor, applyAccent]);
 
   useEffect(() => {
+    if (!settingsLoaded) return;
     persistSettings();
-  }, [baseDir, autoRefresh, persistSettings]);
+  }, [settingsLoaded, persistSettings]);
 
   useEffect(() => {
     const onSystemThemeChange = () => {

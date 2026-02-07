@@ -1,4 +1,4 @@
-import { Button, Card, Field, Input, Radio, RadioGroup, Switch, Text, Title2 } from "@fluentui/react-components";
+import { Button, Card, Field, Input, Radio, RadioGroup, Spinner, Switch, Text, Title2 } from "@fluentui/react-components";
 import type { ThemeMode } from "../composables/useSettings";
 
 interface SettingsPageProps {
@@ -8,6 +8,7 @@ interface SettingsPageProps {
   accentColor: string;
   autoRefresh: boolean;
   loading: boolean;
+  loadingAction: "load" | "refresh" | null;
   onBaseDirChange: (value: string) => void;
   onThemeModeChange: (value: ThemeMode) => void;
   onAccentColorChange: (value: string) => void;
@@ -36,11 +37,20 @@ export default function SettingsPage(props: SettingsPageProps) {
               />
             </Field>
             <div className="settings-actions">
-              <Button appearance="primary" disabled={props.loading} onClick={props.onRefresh}>
-                手动更新库
+              <Button
+                appearance="primary"
+                disabled={props.loading}
+                icon={props.loadingAction === "refresh" ? <Spinner size="tiny" /> : undefined}
+                onClick={props.onRefresh}
+              >
+                {props.loadingAction === "refresh" ? "正在更新缓存..." : "手动更新库"}
               </Button>
-              <Button disabled={props.loading} onClick={props.onLoad}>
-                读取缓存
+              <Button
+                disabled={props.loading}
+                icon={props.loadingAction === "load" ? <Spinner size="tiny" /> : undefined}
+                onClick={props.onLoad}
+              >
+                {props.loadingAction === "load" ? "正在读取缓存..." : "读取缓存"}
               </Button>
             </div>
             <Text size={200}>缓存数据库存放在库目录下的 anime-manager.sqlite。</Text>
