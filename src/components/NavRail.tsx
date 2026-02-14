@@ -1,4 +1,4 @@
-import { Button, Text } from "@fluentui/react-components";
+import { Button, Tab, TabList, Text } from "@fluentui/react-components";
 import {
   LibraryRegular,
   PanelLeftContractRegular,
@@ -21,6 +21,8 @@ export default function NavRail({
   onToggle,
   onSelect,
 }: NavRailProps) {
+  const navValue = selection === "settings" ? "settings" : "library";
+
   return (
     <aside className={`nav-rail ${collapsed ? "" : "expanded"}`}>
       <div className="nav-brand">
@@ -35,23 +37,27 @@ export default function NavRail({
         )}
       </div>
 
-      <div className="nav-items">
-        <Button
-          appearance={selection === "library" ? "primary" : "subtle"}
+      <TabList
+        vertical
+        selectedValue={navValue}
+        className="nav-tabs"
+        onTabSelect={(_, data) => onSelect(data.value === "settings" ? "settings" : "library")}
+      >
+        <Tab
+          value="library"
           icon={<LibraryRegular />}
-          onClick={() => onSelect("library")}
+          aria-label="资源库"
         >
           {!collapsed ? "资源库" : null}
-        </Button>
-
-        <Button
-          appearance={selection === "settings" ? "primary" : "subtle"}
+        </Tab>
+        <Tab
+          value="settings"
           icon={<SettingsRegular />}
-          onClick={() => onSelect("settings")}
+          aria-label="设置"
         >
           {!collapsed ? "设置" : null}
-        </Button>
-      </div>
+        </Tab>
+      </TabList>
 
       <div className="nav-footer">
         <Button

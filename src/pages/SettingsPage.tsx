@@ -1,4 +1,5 @@
 import { Button, Card, Field, Input, Radio, RadioGroup, Spinner, Switch, Text, Title2 } from "@fluentui/react-components";
+import { ArrowClockwiseRegular, ArrowDownloadRegular } from "@fluentui/react-icons";
 import type { ThemeMode } from "../composables/useSettings";
 
 interface SettingsPageProps {
@@ -40,14 +41,14 @@ export default function SettingsPage(props: SettingsPageProps) {
               <Button
                 appearance="primary"
                 disabled={props.loading}
-                icon={props.loadingAction === "refresh" ? <Spinner size="tiny" /> : undefined}
+                icon={props.loadingAction === "refresh" ? <Spinner size="tiny" /> : <ArrowClockwiseRegular />}
                 onClick={props.onRefresh}
               >
                 {props.loadingAction === "refresh" ? "正在更新缓存..." : "手动更新库"}
               </Button>
               <Button
                 disabled={props.loading}
-                icon={props.loadingAction === "load" ? <Spinner size="tiny" /> : undefined}
+                icon={props.loadingAction === "load" ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
                 onClick={props.onLoad}
               >
                 {props.loadingAction === "load" ? "正在读取缓存..." : "读取缓存"}

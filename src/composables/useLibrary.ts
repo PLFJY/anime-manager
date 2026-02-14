@@ -25,11 +25,7 @@ export const useLibrary = (baseDir: string) => {
       .filter(Boolean);
   };
 
-  const isCompleted = (item: LibraryEntry) => {
-    const text = `${item.episodes ?? ""}`;
-    if (/未完|连载|更新中/i.test(text)) return false;
-    return true;
-  };
+  const isCompleted = (item: LibraryEntry) => item.episodes > 0;
 
   const statusOptions = useMemo(() => {
     let finished = 0;
@@ -141,6 +137,7 @@ export const useLibrary = (baseDir: string) => {
         item.title,
         item.fansub,
         item.subtitleType,
+        `${item.episodes}`,
         item.quality,
         item.note,
         item.group,

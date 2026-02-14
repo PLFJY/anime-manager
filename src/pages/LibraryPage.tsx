@@ -1,7 +1,33 @@
-import { Badge, Button, Card, Input, Spinner, Text, Title2 } from "@fluentui/react-components";
-import { CheckmarkRegular, DismissRegular, FilterRegular } from "@fluentui/react-icons";
-import { useEffect, useRef } from "react";
-import type { LibraryEntry } from "../types";
+import {
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Field,
+  Input,
+  Spinner,
+  Text,
+  Textarea,
+  Title2,
+} from "@fluentui/react-components";
+import {
+  AddRegular,
+  ArrowResetRegular,
+  ArrowUpRegular,
+  CheckmarkRegular,
+  DismissRegular,
+  FilterRegular,
+  SaveRegular,
+  SearchRegular,
+} from "@fluentui/react-icons";
+import { useEffect, useRef, useState } from "react";
+import type { LibraryEntry, NewAnimePayload } from "../types";
 
 type OptionCount = { name: string; count: number };
 type GroupedItems = { name: string; items: LibraryEntry[] };
@@ -38,6 +64,7 @@ interface LibraryPageProps {
   onCloseFilters: () => void;
   onSelectItem: (value: string | null) => void;
   onOpenDetail: (value: LibraryEntry) => void;
+  onRegisterAnime: (payload: NewAnimePayload) => Promise<boolean>;
 }
 
 export default function LibraryPage(props: LibraryPageProps) {
@@ -45,6 +72,21 @@ export default function LibraryPage(props: LibraryPageProps) {
   const loadingText = props.loadingAction === "refresh" ? "正在更新缓存..." : "正在读取缓存...";
   const drawerRef = useRef<HTMLElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [title, setTitle] = useState("");
+  const [fansub, setFansub] = useState("");
+  const [subtitleType, setSubtitleType] = useState("");
+  const [quality, setQuality] = useState("");
+  const [note, setNote] = useState("");
+  const [isFinished, setIsFinished] = useState(false);
+  const [episodes, setEpisodes] = useState("");
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  const subtitlePreset = ["简体内嵌", "简日双语", "简繁内封", "繁体内嵌", "繁日双语"];
+  const qualityPreset = ["2K", "1080P", "720P", "480P"];
 
   useEffect(() => {
     if (!props.showFilters) return;
@@ -77,9 +119,75 @@ export default function LibraryPage(props: LibraryPageProps) {
     };
   }, [props.showFilters, props.onCloseFilters]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onScroll = () => {
+      setShowBackToTop(container.scrollTop > 200);
+    };
+
+    onScroll();
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+    };
+  }, [props.active]);
+
+  const resetForm = () => {
+    setTitle("");
+    setFansub("");
+    setSubtitleType("");
+    setQuality("");
+    setNote("");
+    setIsFinished(false);
+    setEpisodes("");
+    setFormError("");
+  };
+
+  const onSubmit = async () => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setFormError("动画名称为必填项");
+      return;
+    }
+
+    let parsedEpisodes = -1;
+    if (isFinished) {
+      const value = Number.parseInt(episodes.trim(), 10);
+      if (!Number.isInteger(value) || value <= 0) {
+        setFormError("已完结时，集数必须为正整数");
+        return;
+      }
+      parsedEpisodes = value;
+    }
+
+    setFormError("");
+    setRegistering(true);
+    try {
+      const saved = await props.onRegisterAnime({
+        title: trimmedTitle,
+        fansub: fansub.trim(),
+        subtitleType: subtitleType.trim(),
+        quality: quality.trim(),
+        note: note.trim(),
+        isFinished,
+        episodes: parsedEpisodes,
+      });
+      if (saved) {
+        setRegisterOpen(false);
+        resetForm();
+      }
+    } catch {
+      // Error details are shown by native dialog in App-level handler.
+    } finally {
+      setRegistering(false);
+    }
+  };
+
   return (
     <section className={pageClass} aria-hidden={!props.active}>
-      <div className="page-container">
+      <div ref={containerRef} className="page-container">
         <header className="page-header">
           <Title2>动漫资源管理台</Title2>
           <p className="subtitle">Anime Library / Fluent UI</p>
@@ -88,11 +196,17 @@ export default function LibraryPage(props: LibraryPageProps) {
         </header>
 
         <Card className="controls-bar">
-          <Input
-            value={props.search}
-            onChange={(_, data) => props.onSearchChange(data.value)}
-            placeholder="搜索标题 / 字幕组 / 画质"
-          />
+          <div className="controls-row">
+            <Input
+              value={props.search}
+              onChange={(_, data) => props.onSearchChange(data.value)}
+              placeholder="搜索标题 / 字幕组 / 画质"
+              contentBefore={<SearchRegular />}
+            />
+            <Button appearance="primary" icon={<AddRegular />} onClick={() => setRegisterOpen(true)}>
+              登记新动画
+            </Button>
+          </div>
         </Card>
 
         <div className="stats-bar">
@@ -153,7 +267,7 @@ export default function LibraryPage(props: LibraryPageProps) {
                             <div className="anime-card-title">{item.title}</div>
                             <div className="anime-card-folder">{item.folderName}</div>
                             <div className="anime-card-badges">
-                              {item.episodes && <Badge>{item.episodes}</Badge>}
+                              <Badge>{item.episodes > 0 ? `${item.episodes} 集` : "未完结"}</Badge>
                               {item.quality && <Badge color="informative">{item.quality}</Badge>}
                             </div>
                           </div>
@@ -177,6 +291,15 @@ export default function LibraryPage(props: LibraryPageProps) {
       </div>
 
       {props.showFilters && <div className="filter-overlay" />}
+      <Button
+        className={`back-to-top-launcher ${showBackToTop ? "is-visible" : "is-hidden"}`}
+        appearance="secondary"
+        icon={<ArrowUpRegular />}
+        disabled={!showBackToTop}
+        onClick={() => containerRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+      >
+        返回顶部
+      </Button>
       <Button
         ref={triggerRef}
         className="filter-launcher"
@@ -203,6 +326,7 @@ export default function LibraryPage(props: LibraryPageProps) {
         <Button
           className="filter-clear-button"
           appearance={props.hasAnyFilter ? "secondary" : "primary"}
+          icon={<ArrowResetRegular />}
           onClick={props.onClearFilters}
         >
           显示全部
@@ -290,6 +414,92 @@ export default function LibraryPage(props: LibraryPageProps) {
           </div>
         </div>
       </aside>
+
+      <Dialog open={registerOpen} onOpenChange={(_, data) => setRegisterOpen(data.open)}>
+        <DialogSurface className="register-dialog">
+          <DialogBody>
+            <DialogTitle>登记新动画</DialogTitle>
+            <DialogContent>
+              <div className="register-form">
+                <Field label="动画名称" required validationMessage={formError && !title.trim() ? formError : undefined}>
+                  <Input value={title} onChange={(_, data) => setTitle(data.value)} placeholder="例如：夏日口袋" />
+                </Field>
+                <Field label="字幕组">
+                  <Input value={fansub} onChange={(_, data) => setFansub(data.value)} placeholder="例如：桜都字幕组" />
+                </Field>
+                <Field label="字幕类型">
+                  <Input
+                    value={subtitleType}
+                    onChange={(_, data) => setSubtitleType(data.value)}
+                    list="subtitle-type-options"
+                    placeholder="可选择或手动输入"
+                  />
+                  <datalist id="subtitle-type-options">
+                    {subtitlePreset.map((option) => (
+                      <option key={option} value={option} />
+                    ))}
+                  </datalist>
+                </Field>
+                <Checkbox
+                  checked={isFinished}
+                  onChange={(_, data) => setIsFinished(Boolean(data.checked))}
+                  label="已完结"
+                />
+                <Field
+                  label="集数"
+                  validationMessage={formError && isFinished ? formError : undefined}
+                >
+                  <Input
+                    value={isFinished ? episodes : "-1"}
+                    onChange={(_, data) => setEpisodes(data.value)}
+                    disabled={!isFinished}
+                    type="number"
+                    min={1}
+                    placeholder={isFinished ? "请输入正整数" : "-1"}
+                  />
+                </Field>
+                <Field label="清晰度">
+                  <Input
+                    value={quality}
+                    onChange={(_, data) => setQuality(data.value)}
+                    list="quality-options"
+                    placeholder="可选择或手动输入"
+                  />
+                  <datalist id="quality-options">
+                    {qualityPreset.map((option) => (
+                      <option key={option} value={option} />
+                    ))}
+                  </datalist>
+                </Field>
+                <Field label="备注">
+                  <Textarea
+                    value={note}
+                    onChange={(_, data) => setNote(data.value)}
+                    resize="vertical"
+                    placeholder="可选"
+                  />
+                </Field>
+              </div>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                disabled={registering}
+                icon={<DismissRegular />}
+                onClick={() => {
+                  setRegisterOpen(false);
+                  resetForm();
+                }}
+              >
+                取消
+              </Button>
+              <Button appearance="primary" icon={<SaveRegular />} disabled={registering} onClick={onSubmit}>
+                {registering ? "保存中..." : "保存"}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </section>
   );
 }

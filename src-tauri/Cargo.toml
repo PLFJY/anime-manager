@@ -1,6 +1,6 @@
 [package]
 name = "anime-manager"
-version = "0.2.1"
+version = "0.2.2"
 description = "Anime manager"
 authors = ["you"]
 edition = "2021"
@@ -17,6 +17,7 @@ walkdir = "2"
 rusqlite = { version = "0.31", features = ["bundled"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 open = "5"
+rfd = "0.15"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

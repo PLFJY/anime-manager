@@ -13,9 +13,16 @@ struct ManifestRaw {
     title: Option<String>,
     fansub: Option<String>,
     subtitle_type: Option<String>,
-    episodes: Option<String>,
+    episodes: Option<EpisodesValue>,
     quality: Option<String>,
     note: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum EpisodesValue {
+    Int(i64),
+    Str(String),
 }
 
 #[derive(Debug, Serialize)]
@@ -25,7 +32,7 @@ struct LibraryEntry {
     title: String,
     fansub: String,
     subtitle_type: String,
-    episodes: String,
+    episodes: i64,
     quality: String,
     note: String,
     path: String,
@@ -50,13 +57,43 @@ struct FileEntry {
     manifest_title: String,
     manifest_fansub: String,
     manifest_subtitle_type: String,
-    manifest_episodes: String,
+    manifest_episodes: i64,
     manifest_quality: String,
     manifest_note: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NewAnimePayload {
+    title: String,
+    fansub: Option<String>,
+    subtitle_type: Option<String>,
+    episodes: i64,
+    quality: Option<String>,
+    note: Option<String>,
+    is_finished: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct ManifestWriteModel {
+    title: String,
+    fansub: String,
+    subtitle_type: String,
+    episodes: i64,
+    quality: String,
+    note: String,
+}
+
 fn normalize(value: Option<String>) -> String {
     value.unwrap_or_default().trim().to_string()
+}
+
+fn normalize_episodes(value: Option<EpisodesValue>) -> i64 {
+    match value {
+        Some(EpisodesValue::Int(v)) => v,
+        Some(EpisodesValue::Str(v)) => v.trim().parse::<i64>().unwrap_or(-1),
+        None => -1,
+    }
 }
 
 fn normalize_path(path: &Path) -> String {
@@ -102,7 +139,7 @@ fn build_entry(base_dir: &Path, manifest_path: &Path, raw: ManifestRaw) -> Libra
         title,
         fansub: normalize(raw.fansub),
         subtitle_type: normalize(raw.subtitle_type),
-        episodes: normalize(raw.episodes),
+        episodes: normalize_episodes(raw.episodes),
         quality: normalize(raw.quality),
         note: normalize(raw.note),
         path: normalize_path(parent),
@@ -138,7 +175,7 @@ fn init_db(conn: &Connection) -> Result<(), String> {
             title TEXT,
             fansub TEXT,
             subtitle_type TEXT,
-            episodes TEXT,
+            episodes INTEGER,
             quality TEXT,
             note TEXT,
             path TEXT,
@@ -169,7 +206,7 @@ fn load_entries(conn: &Connection, library_root: &str) -> Result<Vec<LibraryEntr
                 m.title,
                 m.fansub,
                 m.subtitle_type,
-                m.episodes,
+                COALESCE(CAST(m.episodes AS INTEGER), -1),
                 m.quality,
                 m.note,
                 m.path,
@@ -296,7 +333,7 @@ fn refresh_library(base_dir: String) -> Result<Vec<LibraryEntry>, String> {
                     entry.title.as_str(),
                     entry.fansub.as_str(),
                     entry.subtitle_type.as_str(),
-                    entry.episodes.as_str(),
+                    entry.episodes,
                     entry.quality.as_str(),
                     entry.note.as_str(),
                     entry.path.as_str(),
@@ -349,7 +386,7 @@ fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
         let mut manifest_title = String::new();
         let mut manifest_fansub = String::new();
         let mut manifest_subtitle_type = String::new();
-        let mut manifest_episodes = String::new();
+        let mut manifest_episodes = -1;
         let mut manifest_quality = String::new();
         let mut manifest_note = String::new();
 
@@ -362,7 +399,7 @@ fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
                         manifest_title = normalize(raw.title);
                         manifest_fansub = normalize(raw.fansub);
                         manifest_subtitle_type = normalize(raw.subtitle_type);
-                        manifest_episodes = normalize(raw.episodes);
+                        manifest_episodes = normalize_episodes(raw.episodes);
                         manifest_quality = normalize(raw.quality);
                         manifest_note = normalize(raw.note);
                     }
@@ -409,6 +446,98 @@ fn dir_size(path: &Path) -> u64 {
         .sum()
 }
 
+fn normalize_new_text(value: Option<String>) -> String {
+    value.unwrap_or_default().trim().to_string()
+}
+
+#[tauri::command]
+fn create_anime_manifest(base_dir: String, payload: NewAnimePayload) -> Result<Option<String>, String> {
+    let base = PathBuf::from(base_dir.trim());
+    if !base.exists() {
+        return Err(format!("Base directory not found: {}", base.display()));
+    }
+
+    let title = payload.title.trim().to_string();
+    if title.is_empty() {
+        return Err("动画名称不能为空".to_string());
+    }
+
+    let episodes = if payload.is_finished {
+        if payload.episodes <= 0 {
+            return Err("已完结动画的集数必须是正整数".to_string());
+        }
+        payload.episodes
+    } else {
+        -1
+    };
+
+    let selected_path = rfd::FileDialog::new()
+        .set_title("保存 manifest.yml")
+        .set_directory(&base)
+        .set_file_name("manifest.yml")
+        .save_file();
+    let Some(manifest_path) = selected_path else {
+        return Ok(None);
+    };
+    if let Some(parent) = manifest_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|err| format!("Failed to create folder {}: {}", parent.display(), err))?;
+    }
+
+    let content = serde_yaml::to_string(&ManifestWriteModel {
+        title,
+        fansub: normalize_new_text(payload.fansub),
+        subtitle_type: normalize_new_text(payload.subtitle_type),
+        episodes,
+        quality: normalize_new_text(payload.quality),
+        note: normalize_new_text(payload.note),
+    })
+    .map_err(|err| format!("Failed to build manifest content: {}", err))?;
+
+    fs::write(&manifest_path, content)
+        .map_err(|err| format!("Failed to write {}: {}", manifest_path.display(), err))?;
+
+    Ok(Some(normalize_path(&manifest_path)))
+}
+
+#[tauri::command]
+fn update_anime_manifest(entry_path: String, payload: NewAnimePayload) -> Result<String, String> {
+    let target_dir = PathBuf::from(entry_path.trim());
+    if !target_dir.exists() {
+        return Err(format!("Entry directory not found: {}", target_dir.display()));
+    }
+
+    let title = payload.title.trim().to_string();
+    if title.is_empty() {
+        return Err("动画名称不能为空".to_string());
+    }
+
+    let episodes = if payload.is_finished {
+        if payload.episodes <= 0 {
+            return Err("已完结动画的集数必须是正整数".to_string());
+        }
+        payload.episodes
+    } else {
+        -1
+    };
+
+    let content = serde_yaml::to_string(&ManifestWriteModel {
+        title,
+        fansub: normalize_new_text(payload.fansub),
+        subtitle_type: normalize_new_text(payload.subtitle_type),
+        episodes,
+        quality: normalize_new_text(payload.quality),
+        note: normalize_new_text(payload.note),
+    })
+    .map_err(|err| format!("Failed to build manifest content: {}", err))?;
+
+    let manifest_path = target_dir.join("manifest.yml");
+    fs::write(&manifest_path, content)
+        .map_err(|err| format!("Failed to write {}: {}", manifest_path.display(), err))?;
+
+    Ok(normalize_path(&manifest_path))
+}
+
 #[tauri::command]
 fn update_play_history(base_dir: String, entry_id: String, file_path: String, file_name: String) -> Result<(), String> {
     let base = PathBuf::from(base_dir.trim());
@@ -441,15 +570,28 @@ fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn show_error_dialog(title: String, message: String) -> Result<(), String> {
+    rfd::MessageDialog::new()
+        .set_title(title)
+        .set_description(message)
+        .set_level(rfd::MessageLevel::Error)
+        .show();
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             load_library,
             refresh_library,
             list_directory,
+            create_anime_manifest,
+            update_anime_manifest,
             update_play_history,
             open_in_explorer,
-            open_path
+            open_path,
+            show_error_dialog
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

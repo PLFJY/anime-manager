@@ -1,5 +1,5 @@
 import { FluentProvider, webDarkTheme, webLightTheme } from "@fluentui/react-components";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import NavRail from "./components/NavRail";
 import { useDirectoryBrowser } from "./composables/useDirectoryBrowser";
 import { useLayout } from "./composables/useLayout";
@@ -8,6 +8,8 @@ import { useSettings } from "./composables/useSettings";
 import DetailPage from "./pages/DetailPage";
 import LibraryPage from "./pages/LibraryPage";
 import SettingsPage from "./pages/SettingsPage";
+import { createAnimeManifest, showErrorDialog, updateAnimeManifest } from "./services/library";
+import type { NewAnimePayload } from "./types";
 
 export default function App() {
   const hasMountedRef = useRef(false);
@@ -157,6 +159,46 @@ export default function App() {
       : webLightTheme;
   }, [themeMode]);
 
+  const registerAnime = useCallback(
+    async (payload: NewAnimePayload) => {
+      try {
+        const savedPath = await createAnimeManifest(baseDir.trim(), payload);
+        if (!savedPath) {
+          return false;
+        }
+        await triggerRefresh();
+        return true;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        try {
+          await showErrorDialog("登记新动画失败", message);
+        } catch {
+          console.error("Failed to show native error dialog:", message);
+        }
+        throw err;
+      }
+    },
+    [baseDir, triggerRefresh]
+  );
+
+  const editAnime = useCallback(
+    async (entryPath: string, payload: NewAnimePayload) => {
+      try {
+        await updateAnimeManifest(entryPath, payload);
+        await triggerRefresh();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        try {
+          await showErrorDialog("编辑动画信息失败", message);
+        } catch {
+          console.error("Failed to show native error dialog:", message);
+        }
+        throw err;
+      }
+    },
+    [triggerRefresh]
+  );
+
   return (
     <FluentProvider theme={resolvedTheme} className="app-shell">
       <NavRail
@@ -200,6 +242,7 @@ export default function App() {
             onOpenEntry={openEntry}
             onPlayLast={playLast}
             onNavigateBreadcrumb={navigateBreadcrumb}
+            onEditAnime={editAnime}
           />
 
           <LibraryPage
@@ -234,6 +277,7 @@ export default function App() {
             onCloseFilters={() => setFiltersOpen(false)}
             onSelectItem={setSelectedId}
             onOpenDetail={openDetail}
+            onRegisterAnime={registerAnime}
           />
         </div>
       </main>

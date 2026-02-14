@@ -3,7 +3,7 @@ export interface LibraryEntry {
   title: string;
   fansub: string;
   subtitleType: string;
-  episodes: string;
+  episodes: number;
   quality: string;
   note: string;
   path: string;
@@ -26,7 +26,17 @@ export interface FileEntry {
   manifestTitle: string;
   manifestFansub: string;
   manifestSubtitleType: string;
-  manifestEpisodes: string;
+  manifestEpisodes: number;
   manifestQuality: string;
   manifestNote: string;
+}
+
+export interface NewAnimePayload {
+  title: string;
+  fansub: string;
+  subtitleType: string;
+  quality: string;
+  note: string;
+  isFinished: boolean;
+  episodes: number;
 }
