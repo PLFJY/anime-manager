@@ -17,6 +17,76 @@ export const useLibrary = (baseDir: string) => {
 
   const normalized = (value: string) => value.toLowerCase().replace(/\s+/g, "");
 
+  const chineseDigit = (char: string) => {
+    const map: Record<string, number> = {
+      零: 0,
+      一: 1,
+      二: 2,
+      两: 2,
+      三: 3,
+      四: 4,
+      五: 5,
+      六: 6,
+      七: 7,
+      八: 8,
+      九: 9,
+    };
+    return map[char];
+  };
+
+  const parseChineseNumber = (text: string) => {
+    if (!text) return Number.NaN;
+    if (/^\d+$/.test(text)) return Number.parseInt(text, 10);
+    if (text === "十") return 10;
+    const tenIndex = text.indexOf("十");
+    if (tenIndex >= 0) {
+      const left = text.slice(0, tenIndex);
+      const right = text.slice(tenIndex + 1);
+      const tens = left ? chineseDigit(left) : 1;
+      const ones = right ? chineseDigit(right) : 0;
+      if (Number.isFinite(tens) && Number.isFinite(ones)) {
+        return tens * 10 + ones;
+      }
+    }
+    if (text.length === 1) {
+      const single = chineseDigit(text);
+      if (Number.isFinite(single)) return single;
+    }
+    return Number.NaN;
+  };
+
+  const seasonMeta = (title: string) => {
+    const trimmed = (title || "").trim();
+    const seasonMatch =
+      trimmed.match(/^(.*?)[\s\-_:：]*第([零一二两三四五六七八九十\d]+)\s*(季|期|部)\s*$/) ??
+      trimmed.match(/^(.*?)[\s\-_:：]*(?:S|Season)\s*([0-9]+)\s*$/i);
+    if (!seasonMatch) {
+      return { base: trimmed, season: Number.NaN };
+    }
+    const base = seasonMatch[1]?.trim() || trimmed;
+    const seasonRaw = seasonMatch[2]?.trim() || "";
+    const season = parseChineseNumber(seasonRaw);
+    return { base, season };
+  };
+
+  const sortByTitle = (a: LibraryEntry, b: LibraryEntry) => {
+    const am = seasonMeta(a.title);
+    const bm = seasonMeta(b.title);
+
+    const baseOrder = am.base.localeCompare(bm.base, "zh");
+    if (baseOrder !== 0) return baseOrder;
+
+    const aSeason = Number.isFinite(am.season);
+    const bSeason = Number.isFinite(bm.season);
+    if (aSeason && bSeason && am.season !== bm.season) {
+      return am.season - bm.season;
+    }
+    if (aSeason !== bSeason) {
+      return aSeason ? -1 : 1;
+    }
+    return a.title.localeCompare(b.title, "zh");
+  };
+
   const splitMulti = (value?: string) => {
     if (!value) return [];
     return value
@@ -161,7 +231,7 @@ export const useLibrary = (baseDir: string) => {
       .sort(([a], [b]) => a.localeCompare(b, "zh"))
       .map(([name, groupItems]) => ({
         name,
-        items: groupItems.sort((a, b) => a.title.localeCompare(b.title, "zh")),
+        items: groupItems.sort(sortByTitle),
       }));
   }, [filteredItems]);
 
@@ -188,7 +258,12 @@ export const useLibrary = (baseDir: string) => {
     try {
       const results = await loadLibrary(baseDir.trim());
       setItems(results);
-      setSelectedId(results[0]?.id ?? null);
+      setSelectedId((prev) => {
+        if (prev && results.some((item) => item.id === prev)) {
+          return prev;
+        }
+        return results[0]?.id ?? null;
+      });
       return results;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -206,7 +281,12 @@ export const useLibrary = (baseDir: string) => {
     try {
       const results = await refreshLibrary(baseDir.trim());
       setItems(results);
-      setSelectedId(results[0]?.id ?? null);
+      setSelectedId((prev) => {
+        if (prev && results.some((item) => item.id === prev)) {
+          return prev;
+        }
+        return results[0]?.id ?? null;
+      });
       return results;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

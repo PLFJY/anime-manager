@@ -8,7 +8,12 @@ import { useSettings } from "./composables/useSettings";
 import DetailPage from "./pages/DetailPage";
 import LibraryPage from "./pages/LibraryPage";
 import SettingsPage from "./pages/SettingsPage";
-import { createAnimeManifest, showErrorDialog, updateAnimeManifest } from "./services/library";
+import {
+  createAnimeManifest,
+  generateVideoIndexMarkdown,
+  showErrorDialog,
+  updateAnimeManifest,
+} from "./services/library";
 import type { NewAnimePayload } from "./types";
 
 export default function App() {
@@ -199,6 +204,20 @@ export default function App() {
     [triggerRefresh]
   );
 
+  const generateIndex = useCallback(async () => {
+    try {
+      await generateVideoIndexMarkdown(baseDir.trim());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      try {
+        await showErrorDialog("生成视频索引失败", message);
+      } catch {
+        console.error("Failed to show native error dialog:", message);
+      }
+      throw err;
+    }
+  }, [baseDir]);
+
   return (
     <FluentProvider theme={resolvedTheme} className="app-shell">
       <NavRail
@@ -278,6 +297,7 @@ export default function App() {
             onSelectItem={setSelectedId}
             onOpenDetail={openDetail}
             onRegisterAnime={registerAnime}
+            onGenerateIndex={generateIndex}
           />
         </div>
       </main>

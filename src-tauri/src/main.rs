@@ -4,6 +4,7 @@ use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
@@ -11,6 +12,8 @@ use walkdir::WalkDir;
 #[derive(Debug, Deserialize)]
 struct ManifestRaw {
     title: Option<String>,
+    #[serde(default)]
+    is_parent: bool,
     fansub: Option<String>,
     subtitle_type: Option<String>,
     episodes: Option<EpisodesValue>,
@@ -77,6 +80,8 @@ struct NewAnimePayload {
 #[derive(Debug, Serialize)]
 struct ManifestWriteModel {
     title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    is_parent: Option<bool>,
     fansub: String,
     subtitle_type: String,
     episodes: i64,
@@ -91,8 +96,8 @@ fn normalize(value: Option<String>) -> String {
 fn normalize_episodes(value: Option<EpisodesValue>) -> i64 {
     match value {
         Some(EpisodesValue::Int(v)) => v,
-        Some(EpisodesValue::Str(v)) => v.trim().parse::<i64>().unwrap_or(-1),
-        None => -1,
+        Some(EpisodesValue::Str(v)) => v.trim().parse::<i64>().unwrap_or(0),
+        None => 0,
     }
 }
 
@@ -115,12 +120,7 @@ fn build_entry(base_dir: &Path, manifest_path: &Path, raw: ManifestRaw) -> Libra
         .map(|value| value.to_string_lossy().to_string())
         .unwrap_or_else(|| relative_dir.clone());
 
-    let group = relative_dir
-        .split('/')
-        .next()
-        .filter(|value| !value.is_empty())
-        .map(|value| value.to_string())
-        .unwrap_or_else(|| folder_name.clone());
+    let group = folder_name.clone();
 
     let title = {
         let candidate = normalize(raw.title);
@@ -150,6 +150,45 @@ fn build_entry(base_dir: &Path, manifest_path: &Path, raw: ManifestRaw) -> Libra
         last_played_name: String::new(),
         last_played_at: 0,
     }
+}
+
+fn default_group_from_relative(relative_dir: &str, fallback: &str) -> String {
+    relative_dir
+        .split('/')
+        .next()
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+fn resolve_group_title(
+    base: &Path,
+    entry: &LibraryEntry,
+    parent_manifest_titles: &HashMap<String, String>,
+) -> String {
+    let manifest_dir = PathBuf::from(&entry.path);
+
+    // Manifest is directly under library root: each entry becomes its own group.
+    if manifest_dir.parent().map(|p| p == base).unwrap_or(false) {
+        return entry.title.clone();
+    }
+
+    // Nested manifest: walk ancestors to find a parent-manifest title (is_parent=true).
+    let mut cursor = manifest_dir.parent();
+    while let Some(parent) = cursor {
+        if parent == base {
+            break;
+        }
+        let key = normalize_path(parent);
+        if let Some(title) = parent_manifest_titles.get(&key) {
+            if !title.is_empty() {
+                return title.clone();
+            }
+        }
+        cursor = parent.parent();
+    }
+
+    default_group_from_relative(&entry.relative_dir, &entry.folder_name)
 }
 
 fn db_path(base_dir: &Path) -> PathBuf {
@@ -206,7 +245,7 @@ fn load_entries(conn: &Connection, library_root: &str) -> Result<Vec<LibraryEntr
                 m.title,
                 m.fansub,
                 m.subtitle_type,
-                COALESCE(CAST(m.episodes AS INTEGER), -1),
+                COALESCE(CAST(m.episodes AS INTEGER), 0),
                 m.quality,
                 m.note,
                 m.path,
@@ -270,7 +309,7 @@ fn refresh_library(base_dir: String) -> Result<Vec<LibraryEntry>, String> {
     let library_root = normalize_path(&base);
     let mut conn = open_db(&base)?;
 
-    let mut entries = Vec::new();
+    let mut parsed = Vec::<(PathBuf, ManifestRaw)>::new();
     for entry in WalkDir::new(&base).into_iter().filter_map(Result::ok) {
         if !entry.file_type().is_file() {
             continue;
@@ -283,7 +322,40 @@ fn refresh_library(base_dir: String) -> Result<Vec<LibraryEntry>, String> {
             .map_err(|err| format!("Failed to read {}: {}", entry.path().display(), err))?;
         let raw: ManifestRaw = serde_yaml::from_str(&content)
             .map_err(|err| format!("Invalid YAML {}: {}", entry.path().display(), err))?;
-        entries.push(build_entry(&base, entry.path(), raw));
+        parsed.push((entry.path().to_path_buf(), raw));
+    }
+
+    let mut parent_manifest_titles = HashMap::<String, String>::new();
+    for (manifest_path, raw) in &parsed {
+        if !raw.is_parent {
+            continue;
+        }
+        let parent_dir = manifest_path
+            .parent()
+            .unwrap_or_else(|| Path::new(""));
+        let fallback = parent_dir
+            .file_name()
+            .map(|v| v.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let title = {
+            let candidate = normalize(raw.title.clone());
+            if candidate.is_empty() {
+                fallback
+            } else {
+                candidate
+            }
+        };
+        parent_manifest_titles.insert(normalize_path(parent_dir), title);
+    }
+
+    let mut entries = Vec::new();
+    for (manifest_path, raw) in parsed {
+        if raw.is_parent {
+            continue;
+        }
+        let mut entry = build_entry(&base, &manifest_path, raw);
+        entry.group = resolve_group_title(&base, &entry, &parent_manifest_titles);
+        entries.push(entry);
     }
 
     entries.sort_by(|a, b| {
@@ -386,7 +458,7 @@ fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
         let mut manifest_title = String::new();
         let mut manifest_fansub = String::new();
         let mut manifest_subtitle_type = String::new();
-        let mut manifest_episodes = -1;
+        let mut manifest_episodes = 0;
         let mut manifest_quality = String::new();
         let mut manifest_note = String::new();
 
@@ -450,6 +522,104 @@ fn normalize_new_text(value: Option<String>) -> String {
     value.unwrap_or_default().trim().to_string()
 }
 
+fn markdown_anchor(text: &str) -> String {
+    text.to_lowercase()
+        .chars()
+        .filter(|ch| {
+            !matches!(
+                ch,
+                '【' | '】' | '[' | ']' | '(' | ')' | '（' | '）' | '：' | ':' | '、' | ',' | '，' | '。' | '!' | '！' | '?' | '？' | '"' | '\''
+            )
+        })
+        .map(|ch| if ch.is_whitespace() { '-' } else { ch })
+        .collect::<String>()
+}
+
+fn format_episodes(value: i64) -> String {
+    if value > 0 {
+        value.to_string()
+    } else if value == 0 {
+        "未知".to_string()
+    } else {
+        "未完结".to_string()
+    }
+}
+
+fn build_video_index_markdown(entries: &[LibraryEntry]) -> String {
+    let mut groups = HashMap::<String, Vec<&LibraryEntry>>::new();
+    for entry in entries {
+        groups.entry(entry.group.clone()).or_default().push(entry);
+    }
+
+    let mut group_names: Vec<String> = groups.keys().cloned().collect();
+    group_names.sort();
+    for name in &group_names {
+        if let Some(items) = groups.get_mut(name) {
+            items.sort_by(|a, b| a.title.cmp(&b.title));
+        }
+    }
+
+    let mut lines = Vec::<String>::new();
+    lines.push("# 视频信息".to_string());
+    lines.push(String::new());
+    lines.push("## 目录".to_string());
+    lines.push(String::new());
+    lines.push("- [视频信息](#视频信息)".to_string());
+    lines.push("  - [目录](#目录)".to_string());
+    for group in &group_names {
+        lines.push(format!("    - [{}](#{})", group, markdown_anchor(group)));
+        if let Some(items) = groups.get(group) {
+            for item in items {
+                if item.title != *group {
+                    lines.push(format!(
+                        "      - [{}](#{})",
+                        item.title,
+                        markdown_anchor(&item.title)
+                    ));
+                }
+            }
+        }
+    }
+
+    lines.push(String::new());
+    for group in &group_names {
+        lines.push(format!("### {}", group));
+        lines.push(String::new());
+        if let Some(items) = groups.get(group) {
+            for item in items {
+                if item.title != *group {
+                    lines.push(format!("#### {}", item.title));
+                }
+                lines.push("```".to_string());
+                lines.push(format!("文件夹名:{}", item.folder_name));
+                lines.push(String::new());
+                lines.push(format!("字幕组:{}", if item.fansub.is_empty() { "未知" } else { &item.fansub }));
+                lines.push(String::new());
+                lines.push(format!(
+                    "字幕形式:{}",
+                    if item.subtitle_type.is_empty() {
+                        "未知"
+                    } else {
+                        &item.subtitle_type
+                    }
+                ));
+                lines.push(String::new());
+                lines.push(format!("集数:{}", format_episodes(item.episodes)));
+                lines.push(String::new());
+                lines.push(format!("画质:{}", if item.quality.is_empty() { "未知" } else { &item.quality }));
+                if !item.note.is_empty() {
+                    lines.push(String::new());
+                    lines.push(format!("备注:{}", item.note));
+                }
+                lines.push("```".to_string());
+                lines.push(String::new());
+            }
+        }
+    }
+
+    lines.join("\n")
+}
+
 #[tauri::command]
 fn create_anime_manifest(base_dir: String, payload: NewAnimePayload) -> Result<Option<String>, String> {
     let base = PathBuf::from(base_dir.trim());
@@ -468,7 +638,7 @@ fn create_anime_manifest(base_dir: String, payload: NewAnimePayload) -> Result<O
         }
         payload.episodes
     } else {
-        -1
+        0
     };
 
     let selected_path = rfd::FileDialog::new()
@@ -486,6 +656,7 @@ fn create_anime_manifest(base_dir: String, payload: NewAnimePayload) -> Result<O
 
     let content = serde_yaml::to_string(&ManifestWriteModel {
         title,
+        is_parent: None,
         fansub: normalize_new_text(payload.fansub),
         subtitle_type: normalize_new_text(payload.subtitle_type),
         episodes,
@@ -518,11 +689,19 @@ fn update_anime_manifest(entry_path: String, payload: NewAnimePayload) -> Result
         }
         payload.episodes
     } else {
-        -1
+        0
     };
+
+    let manifest_path = target_dir.join("manifest.yml");
+    let existing_parent_flag = fs::read_to_string(&manifest_path)
+        .ok()
+        .and_then(|content| serde_yaml::from_str::<ManifestRaw>(&content).ok())
+        .map(|raw| raw.is_parent)
+        .unwrap_or(false);
 
     let content = serde_yaml::to_string(&ManifestWriteModel {
         title,
+        is_parent: if existing_parent_flag { Some(true) } else { None },
         fansub: normalize_new_text(payload.fansub),
         subtitle_type: normalize_new_text(payload.subtitle_type),
         episodes,
@@ -531,11 +710,25 @@ fn update_anime_manifest(entry_path: String, payload: NewAnimePayload) -> Result
     })
     .map_err(|err| format!("Failed to build manifest content: {}", err))?;
 
-    let manifest_path = target_dir.join("manifest.yml");
     fs::write(&manifest_path, content)
         .map_err(|err| format!("Failed to write {}: {}", manifest_path.display(), err))?;
 
     Ok(normalize_path(&manifest_path))
+}
+
+#[tauri::command]
+fn generate_video_index_markdown(base_dir: String) -> Result<String, String> {
+    let base = PathBuf::from(base_dir.trim());
+    if !base.exists() {
+        return Err(format!("Base directory not found: {}", base.display()));
+    }
+
+    let entries = refresh_library(base_dir)?;
+    let markdown = build_video_index_markdown(&entries);
+    let output_path = base.join("视频索引.MD");
+    fs::write(&output_path, markdown)
+        .map_err(|err| format!("Failed to write {}: {}", output_path.display(), err))?;
+    Ok(normalize_path(&output_path))
 }
 
 #[tauri::command]
@@ -588,6 +781,7 @@ fn main() {
             list_directory,
             create_anime_manifest,
             update_anime_manifest,
+            generate_video_index_markdown,
             update_play_history,
             open_in_explorer,
             open_path,

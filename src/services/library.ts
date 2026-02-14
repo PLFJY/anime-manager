@@ -68,3 +68,7 @@ export async function updateAnimeManifest(entryPath: string, payload: NewAnimePa
 export async function showErrorDialog(title: string, message: string): Promise<void> {
   await invoke<void>("show_error_dialog", { title, message });
 }
+
+export async function generateVideoIndexMarkdown(baseDir: string): Promise<string> {
+  return await invoke<string>("generate_video_index_markdown", { baseDir });
+}

@@ -58,6 +58,11 @@ export const useDirectoryBrowser = ({
     return ["mp4", "mkv", "webm", "avi", "m4v"].includes(ext);
   };
 
+  const isAudioFile = (entry: FileEntry) => {
+    const ext = entry.extension.toLowerCase();
+    return ["mp3", "flac", "m4a", "aac", "wav", "ogg", "opus"].includes(ext);
+  };
+
   const sortDirectoryEntries = (entries: FileEntry[]) => {
     return [...entries].sort((a, b) => {
       if (a.hasManifest !== b.hasManifest) {
@@ -80,7 +85,10 @@ export const useDirectoryBrowser = ({
       const filtered = entries.filter(
         (entry) => entry.name.toLowerCase() !== "manifest.yml"
       );
-      const sorted = sortDirectoryEntries(filtered);
+      const mediaOnly = filtered.filter(
+        (entry) => entry.isDir || isVideoFile(entry) || isAudioFile(entry)
+      );
+      const sorted = sortDirectoryEntries(mediaOnly);
       setDirEntries(sorted);
       dirCache.current.set(path, sorted);
     } catch (err) {

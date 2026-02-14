@@ -105,7 +105,7 @@ export default function DetailPage(props: DetailPageProps) {
       return;
     }
 
-    let parsedEpisodes = -1;
+    let parsedEpisodes = 0;
     if (isFinished) {
       const value = Number.parseInt(episodes.trim(), 10);
       if (!Number.isInteger(value) || value <= 0) {
@@ -190,7 +190,15 @@ export default function DetailPage(props: DetailPageProps) {
                 </div>
                 <div className="detail-info-item">
                   <dt>集数</dt>
-                  <dd>{props.selected ? (props.selected.episodes > 0 ? `${props.selected.episodes} 集` : "未完结") : "-"}</dd>
+                  <dd>
+                    {props.selected
+                      ? props.selected.episodes > 0
+                        ? `${props.selected.episodes} 集`
+                        : props.selected.episodes === 0
+                          ? "未知"
+                          : "未完结"
+                      : "-"}
+                  </dd>
                 </div>
                 <div className="detail-info-item">
                   <dt>画质</dt>
@@ -248,7 +256,7 @@ export default function DetailPage(props: DetailPageProps) {
                         {entry.hasManifest ? (
                           <>
                             {entry.manifestQuality && <Badge>{entry.manifestQuality}</Badge>}
-                            <Badge>{entry.manifestEpisodes > 0 ? `${entry.manifestEpisodes} 集` : "未完结"}</Badge>
+                            <Badge>{entry.manifestEpisodes > 0 ? `${entry.manifestEpisodes} 集` : entry.manifestEpisodes === 0 ? "未知" : "未完结"}</Badge>
                             {entry.manifestFansub && <Badge appearance="tint">字幕组：{entry.manifestFansub}</Badge>}
                             {entry.manifestSubtitleType && <Badge appearance="tint">字幕：{entry.manifestSubtitleType}</Badge>}
                           </>
@@ -314,12 +322,12 @@ export default function DetailPage(props: DetailPageProps) {
                   validationMessage={formError && isFinished ? formError : undefined}
                 >
                   <Input
-                    value={isFinished ? episodes : "-1"}
+                    value={isFinished ? episodes : "0"}
                     onChange={(_, data) => setEpisodes(data.value)}
                     disabled={!isFinished}
                     type="number"
                     min={1}
-                    placeholder={isFinished ? "请输入正整数" : "-1"}
+                    placeholder={isFinished ? "请输入正整数" : "0"}
                   />
                 </Field>
                 <Field label="清晰度">

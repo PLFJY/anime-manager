@@ -21,6 +21,7 @@ import {
   ArrowResetRegular,
   ArrowUpRegular,
   CheckmarkRegular,
+  DocumentRegular,
   DismissRegular,
   FilterRegular,
   SaveRegular,
@@ -65,6 +66,7 @@ interface LibraryPageProps {
   onSelectItem: (value: string | null) => void;
   onOpenDetail: (value: LibraryEntry) => void;
   onRegisterAnime: (payload: NewAnimePayload) => Promise<boolean>;
+  onGenerateIndex: () => Promise<void>;
 }
 
 export default function LibraryPage(props: LibraryPageProps) {
@@ -84,6 +86,7 @@ export default function LibraryPage(props: LibraryPageProps) {
   const [isFinished, setIsFinished] = useState(false);
   const [episodes, setEpisodes] = useState("");
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [indexing, setIndexing] = useState(false);
 
   const subtitlePreset = ["简体内嵌", "简日双语", "简繁内封", "繁体内嵌", "繁日双语"];
   const qualityPreset = ["2K", "1080P", "720P", "480P"];
@@ -152,7 +155,7 @@ export default function LibraryPage(props: LibraryPageProps) {
       return;
     }
 
-    let parsedEpisodes = -1;
+    let parsedEpisodes = 0;
     if (isFinished) {
       const value = Number.parseInt(episodes.trim(), 10);
       if (!Number.isInteger(value) || value <= 0) {
@@ -185,6 +188,15 @@ export default function LibraryPage(props: LibraryPageProps) {
     }
   };
 
+  const onGenerateIndex = async () => {
+    setIndexing(true);
+    try {
+      await props.onGenerateIndex();
+    } finally {
+      setIndexing(false);
+    }
+  };
+
   return (
     <section className={pageClass} aria-hidden={!props.active}>
       <div ref={containerRef} className="page-container">
@@ -205,6 +217,9 @@ export default function LibraryPage(props: LibraryPageProps) {
             />
             <Button appearance="primary" icon={<AddRegular />} onClick={() => setRegisterOpen(true)}>
               登记新动画
+            </Button>
+            <Button appearance="secondary" icon={<DocumentRegular />} disabled={indexing} onClick={onGenerateIndex}>
+              {indexing ? "生成中..." : "生成索引"}
             </Button>
           </div>
         </Card>
@@ -267,7 +282,7 @@ export default function LibraryPage(props: LibraryPageProps) {
                             <div className="anime-card-title">{item.title}</div>
                             <div className="anime-card-folder">{item.folderName}</div>
                             <div className="anime-card-badges">
-                              <Badge>{item.episodes > 0 ? `${item.episodes} 集` : "未完结"}</Badge>
+                              <Badge>{item.episodes > 0 ? `${item.episodes} 集` : item.episodes === 0 ? "未知" : "未完结"}</Badge>
                               {item.quality && <Badge color="informative">{item.quality}</Badge>}
                             </div>
                           </div>
@@ -450,12 +465,12 @@ export default function LibraryPage(props: LibraryPageProps) {
                   validationMessage={formError && isFinished ? formError : undefined}
                 >
                   <Input
-                    value={isFinished ? episodes : "-1"}
+                    value={isFinished ? episodes : "0"}
                     onChange={(_, data) => setEpisodes(data.value)}
                     disabled={!isFinished}
                     type="number"
                     min={1}
-                    placeholder={isFinished ? "请输入正整数" : "-1"}
+                    placeholder={isFinished ? "请输入正整数" : "0"}
                   />
                 </Field>
                 <Field label="清晰度">
