@@ -288,7 +288,7 @@ packages:
   '@floating-ui/dom@1.7.5':
     resolution: {integrity: sha512-N0bD2kIPInNHUHehXhMke1rBGs1dwqvC9O9KYMyyjK7iXt7GAhnro7UlcuYcGdS/yYOlq0MAVgrow8IbWJwyqg==}
 
-  '@floating-ui/utils@0.2.30':
+  '@floating-ui/utils@0.2.10':
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
 
   '@fluentui/keyboard-keys@9.0.8':
@@ -1475,7 +1475,7 @@ snapshots:
 
   '@floating-ui/core@1.7.4':
     dependencies:
-      '@floating-ui/utils': 0.2.30
+      '@floating-ui/utils': 0.2.10
 
   '@floating-ui/devtools@0.2.3(@floating-ui/dom@1.7.5)':
     dependencies:
@@ -1484,9 +1484,9 @@ snapshots:
   '@floating-ui/dom@1.7.5':
     dependencies:
       '@floating-ui/core': 1.7.4
-      '@floating-ui/utils': 0.2.30
+      '@floating-ui/utils': 0.2.10
 
-  '@floating-ui/utils@0.2.30': {}
+  '@floating-ui/utils@0.2.10': {}
 
   '@fluentui/keyboard-keys@9.0.8':
     dependencies:
