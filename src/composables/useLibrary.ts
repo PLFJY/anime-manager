@@ -96,6 +96,7 @@ export const useLibrary = (baseDir: string) => {
   };
 
   const isCompleted = (item: LibraryEntry) => item.episodes > 0;
+  const isOngoing = (item: LibraryEntry) => item.episodes < 0;
 
   const statusOptions = useMemo(() => {
     let finished = 0;
@@ -103,7 +104,7 @@ export const useLibrary = (baseDir: string) => {
     for (const item of items) {
       if (isCompleted(item)) {
         finished += 1;
-      } else {
+      } else if (isOngoing(item)) {
         ongoing += 1;
       }
     }
@@ -186,9 +187,11 @@ export const useLibrary = (baseDir: string) => {
     return items.filter((item) => {
       const matchesStatus = !statusFilter.length
         ? true
-        : statusFilter.some((value) =>
-            value === "已完结" ? isCompleted(item) : !isCompleted(item)
-          );
+        : statusFilter.some((value) => {
+            if (value === "已完结") return isCompleted(item);
+            if (value === "未完结") return isOngoing(item);
+            return false;
+          });
       if (!matchesStatus) return false;
       if (
         fansubFilter.length &&

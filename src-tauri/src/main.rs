@@ -633,12 +633,12 @@ fn create_anime_manifest(base_dir: String, payload: NewAnimePayload) -> Result<O
     }
 
     let episodes = if payload.is_finished {
-        if payload.episodes <= 0 {
-            return Err("已完结动画的集数必须是正整数".to_string());
+        if payload.episodes < 0 {
+            return Err("已完结动画的集数必须是非负整数（0 表示未知）".to_string());
         }
         payload.episodes
     } else {
-        0
+        -1
     };
 
     let selected_path = rfd::FileDialog::new()
@@ -684,12 +684,12 @@ fn update_anime_manifest(entry_path: String, payload: NewAnimePayload) -> Result
     }
 
     let episodes = if payload.is_finished {
-        if payload.episodes <= 0 {
-            return Err("已完结动画的集数必须是正整数".to_string());
+        if payload.episodes < 0 {
+            return Err("已完结动画的集数必须是非负整数（0 表示未知）".to_string());
         }
         payload.episodes
     } else {
-        0
+        -1
     };
 
     let manifest_path = target_dir.join("manifest.yml");

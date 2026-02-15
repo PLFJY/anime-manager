@@ -155,11 +155,11 @@ export default function LibraryPage(props: LibraryPageProps) {
       return;
     }
 
-    let parsedEpisodes = 0;
+    let parsedEpisodes = -1;
     if (isFinished) {
       const value = Number.parseInt(episodes.trim(), 10);
-      if (!Number.isInteger(value) || value <= 0) {
-        setFormError("已完结时，集数必须为正整数");
+      if (!Number.isInteger(value) || value < 0) {
+        setFormError("已完结时，集数必须为非负整数（0 表示未知）");
         return;
       }
       parsedEpisodes = value;
@@ -465,12 +465,12 @@ export default function LibraryPage(props: LibraryPageProps) {
                   validationMessage={formError && isFinished ? formError : undefined}
                 >
                   <Input
-                    value={isFinished ? episodes : "0"}
+                    value={isFinished ? episodes : "-1"}
                     onChange={(_, data) => setEpisodes(data.value)}
                     disabled={!isFinished}
                     type="number"
-                    min={1}
-                    placeholder={isFinished ? "请输入正整数" : "0"}
+                    min={0}
+                    placeholder={isFinished ? "请输入非负整数（0 表示未知）" : "-1"}
                   />
                 </Field>
                 <Field label="清晰度">
